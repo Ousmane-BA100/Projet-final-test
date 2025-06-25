@@ -1,8 +1,11 @@
-﻿__pycache__/
+﻿# .gitignore
+__pycache__/
 *.py[cod]
-*.class
+*$py.class
 .env
 .venv
 venv/
-*.egg-info/
+ENV/
+.coverage
+htmlcov/
 .pytest_cache/

@@ -1,6 +1,8 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .controllers.weather_controller import router as weather_router
+from .routers.cache_router import router as cache_router  # Ajoutez cette ligne
+from datetime import datetime  # Ajoutez cette ligne
 
 app = FastAPI(
     title="API Météo",
@@ -21,6 +23,7 @@ app.add_middleware(
 
 # Inclure les routeurs
 app.include_router(weather_router)
+app.include_router(cache_router, prefix="/api")  # Ajoutez cette ligne
 
 @app.get("/", include_in_schema=False)
 async def root():

@@ -1,31 +1,17 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from ..services.weather_service import WeatherService
-from ..models.weather_models import WeatherData
+from fastapi import APIRouter, HTTPException
 from typing import Optional
+from src.services import weather_service
 
-router = APIRouter(
-    prefix="/weather",
-    tags=["weather"],
-    responses={404: {"description": "Non trouvé"}}
-)
+router = APIRouter()
 
-weather_service = WeatherService()
-
-@router.get(
-    "/current/{city}",
-    response_model=WeatherData,
-    summary="Obtenir la météo actuelle",
-    description="Récupère les données météorologiques actuelles pour une ville donnée",
-    responses={
-        200: {"description": "Données météorologiques récupérées avec succès"},
-        404: {"description": "Ville non trouvée"},
-        503: {"description": "Service météo indisponible"}
-    }
-)
-async def get_current_weather(city: str):
-    """
-    Récupère les données météorologiques actuelles pour une ville spécifique.
-    
-    - **city**: Nom de la ville (ex: Paris, London, New York)
-    """
-    return await weather_service.get_current_weather(city)
+@router.get("/weather/{city}")
+async def get_weather(city: str):
+    """Récupère les données météo pour une ville donnée (avec cache)"""
+    try:
+        return await weather_service.get_cached_weather(city)
+    except Exception as e:
+        # Ajouter un message d'erreur plus descriptif
+        raise HTTPException(
+            status_code=500,
+            detail=f"Impossible de récupérer les données météo pour {city}: {str(e)}"
+        )

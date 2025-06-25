@@ -1,19 +1,63 @@
+import time  # Ajoutez cette ligne
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 import httpx
-from typing import Optional, Dict, Any
-from ..models.weather_models import WeatherData, Temperature
-from datetime import datetime
 import os
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 import asyncio
 
+# Modèles de données
+class Temperature(BaseModel):
+    current: float
+    feels_like: float
+
+class WeatherData(BaseModel):
+    city: str
+    temperature: Temperature
+    humidity: float
+    wind_speed: float  # en km/h
+    wind_direction: float  # en degrés
+    weather_description: str
+    source: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+# Charger les variables d'environnement
 load_dotenv(override=True)
 
+# Dans src/services/weather_service.py
 class WeatherService:
     def __init__(self):
         self.open_meteo_url = os.getenv("OPENMETEO_URL", "https://api.open-meteo.com/v1")
         self.timeout = 10.0
+        # Initialisation du cache
+        self._cache = {}
+        self.cache_duration = 600  # 10 minutes en secondes
 
+    async def get_cached_weather(self, city: str) -> WeatherData:
+        """Récupère les données météo avec cache"""
+        cache_key = city.lower()
+        current_time = time.time()
+        
+        # Vérifier si les données sont en cache et toujours valides
+        if cache_key in self._cache:
+            cached_data, timestamp = self._cache[cache_key]
+            if current_time - timestamp < self.cache_duration:
+                print(f"Utilisation du cache pour {city}")
+                return cached_data
+        
+        # Si pas de cache valide, faire un nouvel appel
+        print(f"Nouvel appel API pour {city}")
+        fresh_data = await self.get_current_weather(city)
+        self._cache[cache_key] = (fresh_data, current_time)
+        return fresh_data
+
+    async def clear_cache(self) -> None:
+        """Vide le cache"""
+        self._cache.clear()
+        print("Cache vidé")
+    
     async def _get_coordinates(self, city: str) -> Dict[str, float]:
         """Convertit un nom de ville en coordonnées géographiques"""
         # Pour simplifier, nous utilisons des coordonnées fixes
@@ -289,25 +333,39 @@ class WeatherService:
             return None
 
     async def get_current_weather(self, city: str) -> WeatherData:
-        """Récupère les données météo depuis toutes les sources disponibles"""
-        sources = [
-            self._get_weather_from_openmeteo(city),
-            self._get_weather_from_openweather(city),
-            self._get_weather_from_weatherapi(city)
-        ]
-        
-        results = await asyncio.gather(*sources, return_exceptions=True)
-        valid_results = [r for r in results if isinstance(r, WeatherData)]
-        
-        if not valid_results:
+        """Récupère les données météo agrégées depuis toutes les sources disponibles"""
+        try:
+            # Récupérer les données de toutes les sources en parallèle
+            tasks = [
+                self._get_weather_from_openweather(city),
+                self._get_weather_from_weatherapi(city),
+                self._get_weather_from_openmeteo(city)
+            ]
+            
+            # Exécuter toutes les tâches en parallèle
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Filtrer les résultats valides (ceux qui ne sont pas des exceptions)
+            valid_results = [
+                result for result in results 
+                if isinstance(result, WeatherData) and result is not None
+            ]
+            
+            if not valid_results:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Aucune source de données météo n'est disponible"
+                )
+                
+            # Fusionner les résultats
+            return self._merge_weather_data(valid_results)
+            
+        except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Aucune source de données disponible"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erreur lors de la récupération des données météo: {str(e)}"
             )
-        
-        # Pour l'instant, on retourne simplement le premier résultat valide
-        # Plus tard, on pourrait implémenter une logique de fusion des résultats
-        return valid_results[0]
+
 
     async def test_apis(self):
         """Teste la connexion aux différentes APIs"""
@@ -336,3 +394,36 @@ class WeatherService:
             print(f"✓ OpenMeteo: {om_data.temperature.current}°C")
         except Exception as e:
             print(f"✗ OpenMeteo: {str(e)}")
+    
+    def _merge_weather_data(self, weather_data_list: List[WeatherData]) -> WeatherData:
+        """Fusionne les données météo de différentes sources"""
+        if not weather_data_list:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Aucune donnée météo disponible"
+            )
+
+        # Calcul des moyennes
+        avg_temp = sum(d.temperature.current for d in weather_data_list) / len(weather_data_list)
+        avg_feels_like = sum(d.temperature.feels_like for d in weather_data_list) / len(weather_data_list)
+        avg_humidity = sum(d.humidity for d in weather_data_list) / len(weather_data_list)
+        avg_wind_speed = sum(d.wind_speed for d in weather_data_list) / len(weather_data_list)
+        avg_wind_direction = sum(d.wind_direction for d in weather_data_list) / len(weather_data_list)
+
+        # On garde la description de la première source (ou on pourrait en choisir une autre logique)
+        description = weather_data_list[0].weather_description
+
+        return WeatherData(
+            city=weather_data_list[0].city,
+            temperature=Temperature(
+                current=round(avg_temp, 1),
+                feels_like=round(avg_feels_like, 1)
+            ),
+            humidity=round(avg_humidity, 1),
+            wind_speed=round(avg_wind_speed, 1),
+            wind_direction=round(avg_wind_direction),
+            weather_description=description,
+            source="aggregated",
+            timestamp=datetime.utcnow()
+        )
+    

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 import asyncio
+from ..config.redis import get_redis
 
 # Modèles de données
 class Temperature(BaseModel):
@@ -26,37 +27,32 @@ class WeatherData(BaseModel):
 # Charger les variables d'environnement
 load_dotenv(override=True)
 
-# Dans src/services/weather_service.py
+from ..config.redis import get_redis
+
 class WeatherService:
     def __init__(self):
         self.open_meteo_url = os.getenv("OPENMETEO_URL", "https://api.open-meteo.com/v1")
         self.timeout = 10.0
-        # Initialisation du cache
-        self._cache = {}
-        self.cache_duration = 600  # 10 minutes en secondes
+        self.cache_duration = 600  # 10 minutes
 
+    # Puis dans la classe WeatherService :
     async def get_cached_weather(self, city: str) -> WeatherData:
-        """Récupère les données météo avec cache"""
-        cache_key = city.lower()
-        current_time = time.time()
+        """Récupère les données météo avec cache Redis"""
+        cache = await get_redis()
+        cache_key = f"weather:{city.lower()}"
+        cached_data = await cache.get(cache_key)
         
-        # Vérifier si les données sont en cache et toujours valides
-        if cache_key in self._cache:
-            cached_data, timestamp = self._cache[cache_key]
-            if current_time - timestamp < self.cache_duration:
-                print(f"Utilisation du cache pour {city}")
-                return cached_data
-        
-        # Si pas de cache valide, faire un nouvel appel
-        print(f"Nouvel appel API pour {city}")
-        fresh_data = await self.get_current_weather(city)
-        self._cache[cache_key] = (fresh_data, current_time)
-        return fresh_data
+        if cached_data:
+            return WeatherData(**cached_data)
+            
+        weather_data = await self.get_merged_weather(city)
+        await cache.set(cache_key, weather_data.dict(), ex=self.cache_duration)
+        return weather_data
 
     async def clear_cache(self) -> None:
-        """Vide le cache"""
-        self._cache.clear()
-        print("Cache vidé")
+        """Vide le cache Redis"""
+        cache = await get_redis()
+        await cache.flushdb()
     
     async def _get_coordinates(self, city: str) -> Dict[str, float]:
         """Convertit un nom de ville en coordonnées géographiques"""

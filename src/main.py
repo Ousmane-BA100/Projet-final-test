@@ -1,20 +1,42 @@
-﻿from fastapi import FastAPI
+﻿from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .controllers.weather_controller import router as weather_router
-from .routers.cache_router import router as cache_router
-from .monitoring import setup_logging, setup_metrics, add_health_check
-from .config.redis import init_redis, get_redis
+from src.controllers.weather_controller import router as weather_router
+from src.routers.cache_router import router as cache_router
+from src.monitoring import setup_logging, setup_metrics, add_health_check
+from src.config.redis import init_redis, get_redis
 import logging
 import os
 
 logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # Démarrage
+    try:
+        redis = await init_redis()
+        logger.info("✅ Connecté à Redis avec succès")
+        yield
+    except Exception as e:
+        logger.error(f"❌ Erreur de connexion à Redis: {str(e)}")
+        raise
+    finally:
+        # Arrêt
+        try:
+            if 'redis' in locals():
+                await redis.aclose()  # Utilisation de aclose() au lieu de close()
+                logger.info("Connexion Redis fermée avec succès")
+        except Exception as e:
+            logger.error(f"Erreur lors de la fermeture de Redis: {str(e)}")
 
 app = FastAPI(
     title="API Météo",
     description="API d'agrégation de données météorologiques",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan  # Utilisation du gestionnaire de cycle de vie moderne
 )
 
 # Configuration
@@ -32,28 +54,8 @@ app.add_middleware(
 )
 
 # Inclure les routeurs
-app.include_router(weather_router)
+app.include_router(weather_router, prefix="/api")
 app.include_router(cache_router, prefix="/api")
-
-# Gestion du cycle de vie
-@app.on_event("startup")
-async def startup_event():
-    try:
-        await init_redis()
-        logger.info("✅ Connecté à Redis avec succès")
-    except Exception as e:
-        logger.error(f"❌ Erreur de connexion à Redis: {str(e)}")
-        raise
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    try:
-        redis = await get_redis()
-        if redis:
-            await redis.close()
-            logger.info("Connexion Redis fermée avec succès")
-    except Exception as e:
-        logger.error(f"Erreur lors de la fermeture de Redis: {str(e)}")
 
 @app.get("/", include_in_schema=False)
 async def root():

@@ -25,21 +25,65 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app
-      - REDIS_HOST=redis  # Important: doit correspondre au nom du service
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - WEATHERAPI_KEY=${WEATHERAPI_KEY}
+    volumes:
+      - .:/app
+      - prometheus_multiproc:/tmp/prometheus
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
     networks:
       - app-network
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - monitoring
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
 
 volumes:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  prometheus_multiproc:
 
 networks:
   app-network:
+    driver: bridge
+  monitoring:
     driver: bridge

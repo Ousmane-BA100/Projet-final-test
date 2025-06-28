@@ -145,7 +145,7 @@ docker-compose exec app bash -c "pytest -v tests/test_load/ --asyncio-mode=auto"
   - Temps moyen entre les pannes (MTBF) : 4h 32m
 
 #### 📈 Métriques en Temps Réel avec Prometheus
-![Tableau de bord Prometheus](images/prometheus.png)
+![Tableau de bord Prometheus](images/promethus.png)
 
 - **Métriques clés** :
   - `http_requests_total` : Nombre total de requêtes
@@ -187,7 +187,7 @@ docker-compose exec app bash -c "pytest -v tests/test_load/ --asyncio-mode=auto"
   💾 Accès au cache
   🔄 Appels aux services externes
 
-![Journaux des requêtes](images/logs.requests.png)
+![Journaux des requêtes](images/logs_requests.png)
 
 #### 🔗 Accès aux Outils
 

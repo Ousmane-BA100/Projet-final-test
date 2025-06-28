@@ -128,6 +128,11 @@ docker-compose exec app bash -c "pytest -v tests/test_load/ --asyncio-mode=auto"
 
 ### 4. 📊 Monitoring et Observabilité
 
+#### 🧪 Contexte du Test de Charge
+- **Scénario** : Simulation de 100 utilisateurs simultanés pendant 10 minutes
+- **Outils** : Locust sans configuration distribuée
+- **Données de test** : Requêtes réparties
+
 #### 🔍 Aperçu des Performances
 - **Requêtes par seconde (RPS)**
   - **26.7 RPS** - Capacité de traitement en charge maximale
@@ -216,7 +221,7 @@ docker-compose exec app bash -c "pytest -v tests/test_load/ --asyncio-mode=auto"
 4. **Mémoire** : L'utilisation actuelle est bien en dessous des seuils critiques
 
 
-## 🔄 Déploiement
+## 5. 🔄 Déploiement
 
 ### Stratégie de Déploiement Continue
 Notre pipeline de déploiement entièrement automatisé garantit des mises en production rapides et fiables :
@@ -247,7 +252,7 @@ Notre pipeline de déploiement entièrement automatisé garantit des mises en pr
 - **Production** : Déploiement après validation
 - **Bac à sable** : Tests de charge et d'intégration
 
-## 📚 Documentation API
+## 6. 📚 Documentation API
 
 ### Documentation Interactive : http://localhost:8000/docs
 Notre API est entièrement documentée via une interface interactive qui permet de :

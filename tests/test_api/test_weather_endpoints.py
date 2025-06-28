@@ -32,7 +32,7 @@ def test_get_weather_invalid_city(client):
         from fastapi import HTTPException
         mock_get.side_effect = HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not Found"  # Modifier le message d'erreur attendu
+            detail="Not Found"
         )
 
         # Faire la requête à l'API

@@ -9,6 +9,3 @@ venv/
 .env
 .git
 .gitignore
-.pytest_cache
-.coverage
-local_file_execution/

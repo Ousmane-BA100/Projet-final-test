@@ -1,8 +1,8 @@
 name: Test et Déploiement
 
 on:
-  push:
-    branches: [ main ]
+  #push:
+   # branches: [ main ]
   pull_request:
     branches: [ main ]
 

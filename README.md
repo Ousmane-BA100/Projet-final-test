@@ -179,7 +179,7 @@ docker-compose exec app bash -c "pytest -v tests/test_load/ --asyncio-mode=auto"
   - 💻 Consommation des ressources
 
 #### 📝 Journaux d'Activité
-![Journaux des requêtes](images/logs_requests.png)
+![Journaux des requêtes](images/logs_request.png)
 
 - **Types de logs** :
   - 🌐 Requêtes HTTP (entrantes/sortantes)
